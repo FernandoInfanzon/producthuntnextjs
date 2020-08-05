@@ -7,6 +7,8 @@ import { Formulario, Campo, InputSubmit, Error } from '../components/ui/Formular
 
 import { FirebaseContext } from '../firebase';
 
+import Error404 from '../components//layout/404';
+
 
 
 // validaciones
@@ -69,6 +71,8 @@ const NuevoProducto = () => {
     // insertarlo en la base de datos
     firebase.db.collection('productos').add(producto);
 
+
+
     return router.push('/');
 
   }
@@ -99,11 +103,12 @@ const NuevoProducto = () => {
             console.log(url);
             guardarUrlImagen(url);
           } );
-  };
+  }; 
 
-  return (
+  return ( 
     <div>
       <Layout>
+          {!usuario ? <Error404 /> : (
           <>
             <h1
               css={css`
@@ -121,7 +126,7 @@ const NuevoProducto = () => {
                 <input 
                   type="text"
                   id="nombre"
-                  placeholder="Tu Nombre"
+                  placeholder="Nombre del Producto"
                   name="nombre"
                   value={nombre}
                   onChange={handleChange}
@@ -196,6 +201,7 @@ const NuevoProducto = () => {
                 />
             </Formulario>
           </>
+          )}
       </Layout>
     </div>
 
