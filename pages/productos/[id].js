@@ -19,6 +19,18 @@ const ContenedorProducto = styled.div`
     }
 `;
 
+const CreadorProducto = styled.p`
+    padding: 0.1rem 0.5rem;
+    border: #DA552F solid 1px;
+    color: #DA552F;
+    text-transform: uppercase;
+    font-weight: bold;
+    display: inline-block;
+    text-align: center;
+    margin-left: 1rem;
+`;
+
+
 
 const Producto = () => {
 
@@ -26,6 +38,8 @@ const Producto = () => {
     // state del componente
     const [producto, guardarProducto] = useState({});
     const [error, guardarError] = useState(false);
+    const [comentario, guardarComentario] = useState({});
+    const [consultarDB,guardarConsultarDB] = useState(true);
 
     //Routing para obtener el id actual
     const router = useRouter();
@@ -35,36 +49,37 @@ const Producto = () => {
     const {firebase, usuario} = useContext(FirebaseContext);
 
     useEffect(()=> {
-        if(id){
+        if(id && consultarDB){
             const obtenerProducto = async() => {
                 const productoQuery = await firebase.db.collection('productos').doc(id);
                 const producto = await productoQuery.get();
                 if(producto.exists) {
                     guardarProducto(producto.data());
+                    guardarConsultarDB(false);
                 } else {
                     guardarError( true);
-                }
-                
+                    guardarConsultarDB(false);
+                } 
             }
             obtenerProducto();
         }
-    },[id, producto]);
+    },[id]);
 
-    if(Object.keys(producto).length === 0) return 'Cargando...';
+    if(Object.keys(producto).length === 0 && !error) return 'Cargando...';
 
     const {comentarios, creado, descripcion, empresa, nombre, url, urlimagen, votos, creador, haVotado} = producto;
 
     // Administrar y validar los votos
     const votarProducto = () => {
         if(!usuario){
-            return router.push('/lgoin')
+            return router.push('/login')
         }
 
         // obtener y sumar un nuevo voto
         const nuevoTotal = votos + 1;
 
         // Verificar si el usuario actual ha votado
-        if(haVotado.includes(usuario.uid) ) return;
+        if(haVotado.includes(usuario.uid) ) return; 
         
         // guardar el ID del usuario que ha votado
         const nuevoHaVotado = [...haVotado, usuario.uid];
@@ -78,14 +93,85 @@ const Producto = () => {
             ...producto,
             votos: nuevoTotal
         })
+
+        guardarConsultarDB(true);
+    }
+
+    // Funciones para crear comentarios
+    const comentarioChange = e => {
+        guardarComentario({
+            ...comentario,
+            [e.target.name] : e.target.value
+        })
+    }
+
+
+    // Identifica si el comentario es del creador del producto
+    const esCreador = id => {
+        if(creador.id == id) {
+            return true;
+        }
+    }
+
+
+    const agregarComentario = e => {
+        e.preventDefault();
+        if(!usuario){
+            return router.push('/login')
+        }
+
+        // informacion extra al comentario
+        comentario.usuarioId = usuario.uid;
+        comentario.usuarioNombre = usuario.displayName;
+
+        // Tomar copia de comentarios y agregarlos al arreglo
+        const nuevosComentarios = [...comentarios, comentario];
+
+        // Actualizar la BD
+        firebase.db.collection('productos').doc(id).update({comentarios: nuevosComentarios})
+
+
+        // Actualizar el state
+        guardarProducto({
+            ...producto,
+            comentarios: nuevosComentarios
+        })
+
+        guardarConsultarDB(true);
+    }
+
+    // funcion que revisa euque el creador del producto sea el imismo que està autenticado
+    const puedeBorrar = () => {
+        if(!usuario) return false;
+
+        if(creador.id === usuario.uid) {
+            return true
+        }
+    }
+
+    // elimina un producto de la bd
+    const eliminarProducto = async () => {
+        if(!usuario){
+            return router.push('/login')
+        }
+
+        if(creador.id !== usuario.uid){
+            return router.push('/')
+        }
+
+        try {
+          await firebase.db.collection('productos').doc(id).delete();
+          router.push('/'); 
+        } catch (error) {
+            console.log(error);
+        }
     }
 
     return ( 
     <Layout>
         <>
-            {error && <Error404 />}
-        
-            <div className="contenedor">
+            {error ? <Error404 /> : (
+                <div className="contenedor">
                 <h1 css={css`
                     text-align:center;
                     margin-top: 5rem;
@@ -101,11 +187,14 @@ const Producto = () => {
                         {usuario && (
                             <>
                                 <h2>Agrega tu comentario</h2>
-                                <form css={css`overflow: hidden;`}>
+                                <form css={css`overflow: hidden;`} 
+                                    onSubmit={agregarComentario}
+                                >
                                     <Campo>
                                         <input 
                                             type="text"
                                             name="mensaje"
+                                            onChange = {comentarioChange}
                                         />
                                     </Campo>
                                     <InputSubmit 
@@ -117,12 +206,34 @@ const Producto = () => {
                         )}
 
                        <h2 css={css`margin:2rem 0;`}>Comentarios:</h2>
-                        {comentarios.map(comentario => (
-                            <li>
-                                <p>{comentario.nombre}</p>
-                                <p>Escrito por: {comentario.usuarioNombre}</p>
+                       {comentarios.length === 0 ? "Aún no hay comentarios" : (
+
+                        <ul>
+                        {comentarios.map((comentario, i ) => (
+                            <li
+                             key={`${comentario.usuarioId}-${i}`}
+                             css = {css`
+                                border: 1px solid  #e1e1e1;
+                                padding: 2rem;
+                                    `}
+                            >
+                                <p>{comentario.mensaje}</p>
+                                <p>Escrito por: {' '}
+                                <span
+                                css = {css`
+                                font-weight:bold;
+                                    `}
+                                >{comentario.usuarioNombre}</span>
+                                {' '}
+                                {esCreador(comentario.usuarioId) && <CreadorProducto> Autor</CreadorProducto>}
+                                </p>
+                                
                             </li>
                         ))}
+                        </ul>
+
+                       )}
+                       
                     </div>
 
                     <aside> 
@@ -149,10 +260,16 @@ const Producto = () => {
                     
                     </aside>
                 </ContenedorProducto>
-
+                { puedeBorrar() && 
+                    <Boton onClick={eliminarProducto}
+                    >Eliminar Producto</Boton>
+                }
 
 
             </div>
+            )}
+        
+            
         
         </>       
     </Layout> );
